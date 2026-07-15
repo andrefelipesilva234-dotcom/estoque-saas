@@ -1,4 +1,5 @@
 import "./globals.css";
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 export const metadata = {
   title: "Estoque Fácil",
@@ -14,6 +15,7 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body>
         {children}
+        <SpeedInsights />
       </body>
     </html>
   );
