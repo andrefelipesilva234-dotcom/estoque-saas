@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Company {
+  id        String     @id @default(cuid())
+  name      String
+  email     String     @unique
+  phone     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  plan      String     @default("START")
+  auditLogs AuditLog[]
+  products  Product[]
+  users     User[]
+
+  @@map("companies")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  email     String
+  password  String
+  role      String   @default("PROPRIETARIO")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  active    Boolean  @default(true)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, email])
+  @@map("users")
+}
+
+model Product {
+  id           String          @id @default(cuid())
+  companyId    String
+  name         String
+  sku          String?
+  category     String?
+  stock        Int             @default(0)
+  minimumStock Int             @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  company      Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  movements    StockMovement[]
+
+  @@map("products")
+}
+
+model StockMovement {
+  id          String   @id @default(cuid())
+  productId   String
+  type        String
+  quantity    Int
+  observation String?
+  createdAt   DateTime @default(now())
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("stock_movements")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  companyId   String
+  userId      String?
+  action      String
+  productId   String?
+  productName String?
+  oldStock    Int?
+  newStock    Int?
+  difference  Int?
+  createdAt   DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("audit_logs")
+}
