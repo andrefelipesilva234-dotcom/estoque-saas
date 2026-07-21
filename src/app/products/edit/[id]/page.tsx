@@ -1,137 +1,192 @@
+import { AppShell } from "@/components/app-shell";
+import { updateProduct } from "@/actions/update-product";
 import { prisma } from "@/lib/prisma";
 import { getUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { Sidebar } from "@/components/sidebar";
-import { updateProduct } from "@/actions/update-product";
+import Link from "next/link";
 
 interface PageProps {
-params: Promise<{
-id: string;
-}>;
+  params: Promise<{
+    id: string;
+  }>;
 }
 
 export default async function EditProductPage({
-params,
+  params,
 }: PageProps) {
-const user = await getUser();
+  const user = await getUser();
 
-if (!user) {
-redirect("/login");
-}
+  if (!user) {
+    redirect("/login");
+  }
 
-const { id } = await params;
+  const { id } = await params;
 
-const product =
-await prisma.product.findFirst({
-where: {
-id,
-companyId: user.companyId,
-},
-});
+  const product = await prisma.product.findFirst({
+    where: {
+      id,
+      companyId: user.companyId,
+    },
+  });
 
-if (!product) {
-redirect("/products");
-}
+  if (!product) {
+    redirect("/products");
+  }
 
-const updateAction =
-updateProduct.bind(
-null,
-product.id
-);
+  const updateAction = updateProduct.bind(
+    null,
+    product.id
+  );
 
-return ( <div className="flex min-h-screen bg-slate-50"> <Sidebar role={user.role} />
-
-
-  <main className="flex-1 p-8">
-    <div className="max-w-4xl">
-
-      <h1 className="text-4xl font-bold text-slate-900 mb-2">
-        Editar Produto
-      </h1>
-
-      <p className="text-slate-500 mb-8">
-        {product.name}
-      </p>
-
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-
-        <form
-          action={updateAction}
-          className="grid grid-cols-1 md:grid-cols-2 gap-4"
-        >
-
-          <input
-            name="name"
-            defaultValue={product.name}
-            placeholder="Nome"
-            className="border border-slate-300 p-3 rounded-xl"
-            required
-          />
-
-          <input
-            name="sku"
-            defaultValue={product.sku || ""}
-            placeholder="SKU"
-            className="border border-slate-300 p-3 rounded-xl"
-          />
-
-          <input
-            name="category"
-            defaultValue={product.category || ""}
-            placeholder="Categoria"
-            className="border border-slate-300 p-3 rounded-xl"
-          />
-
-          <input
-            name="minimumStock"
-            type="number"
-            defaultValue={product.minimumStock}
-            placeholder="Estoque mínimo"
-            className="border border-slate-300 p-3 rounded-xl"
-            required
-          />
-
-          <div className="md:col-span-2 flex gap-3 pt-4">
-
-            <button
-              type="submit"
-              className="
-                bg-slate-900
-                hover:bg-slate-800
-                text-white
-                px-6
-                py-3
-                rounded-xl
-                transition
-              "
-            >
-              Salvar Alterações
-            </button>
-
-            <a
+  return (
+    <AppShell role={user.role}>
+      <main className="min-w-0">
+        <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 md:px-8 md:py-8">
+          <header className="mb-6 md:mb-8">
+            <Link
               href="/products"
-              className="
-                border
-                border-slate-300
-                px-6
-                py-3
-                rounded-xl
-                hover:bg-slate-100
-              "
+              className="mb-4 inline-flex items-center text-sm font-medium text-slate-600 transition hover:text-slate-900"
             >
-              Cancelar
-            </a>
+              ← Voltar para produtos
+            </Link>
 
-          </div>
+            <h1 className="text-3xl font-bold text-slate-900 md:text-4xl">
+              Editar Produto
+            </h1>
 
-        </form>
+            <p className="mt-2 break-words text-sm text-slate-500 sm:text-base">
+              Atualize as informações de {product.name}
+            </p>
+          </header>
 
-      </div>
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
+              <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">
+                Dados do produto
+              </h2>
 
-    </div>
-  </main>
-</div>
+              <p className="mt-1 text-sm text-slate-500">
+                O estoque atual não é alterado nesta tela.
+              </p>
+            </div>
 
+            <form
+              action={updateAction}
+              className="grid grid-cols-1 gap-5 p-4 sm:p-6 md:grid-cols-2"
+            >
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="product-name"
+                  className="mb-2 block text-sm font-medium text-slate-700"
+                >
+                  Nome do produto
+                </label>
 
-);
+                <input
+                  id="product-name"
+                  name="name"
+                  type="text"
+                  defaultValue={product.name}
+                  placeholder="Nome do produto"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  autoComplete="off"
+                  required
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="product-sku"
+                  className="mb-2 block text-sm font-medium text-slate-700"
+                >
+                  SKU
+                </label>
+
+                <input
+                  id="product-sku"
+                  name="sku"
+                  type="text"
+                  defaultValue={product.sku || ""}
+                  placeholder="Código do produto"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  autoComplete="off"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="product-category"
+                  className="mb-2 block text-sm font-medium text-slate-700"
+                >
+                  Categoria
+                </label>
+
+                <input
+                  id="product-category"
+                  name="category"
+                  type="text"
+                  defaultValue={product.category || ""}
+                  placeholder="Categoria do produto"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  autoComplete="off"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="minimum-stock"
+                  className="mb-2 block text-sm font-medium text-slate-700"
+                >
+                  Estoque mínimo
+                </label>
+
+                <input
+                  id="minimum-stock"
+                  name="minimumStock"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="numeric"
+                  defaultValue={product.minimumStock}
+                  placeholder="Estoque mínimo"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  required
+                />
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Estoque atual
+                </p>
+
+                <p className="mt-1 text-3xl font-bold text-slate-900">
+                  {product.stock}
+                </p>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Use a tela de ajuste para alterar esta quantidade.
+                </p>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 md:col-span-2 sm:flex-row sm:justify-end">
+                <Link
+                  href="/products"
+                  className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 px-6 py-3 font-medium text-slate-700 transition hover:bg-slate-50 sm:w-auto"
+                >
+                  Cancelar
+                </Link>
+
+                <button
+                  type="submit"
+                  className="w-full rounded-xl bg-slate-900 px-6 py-3 font-medium text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 sm:w-auto"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      </main>
+    </AppShell>
+  );
 }

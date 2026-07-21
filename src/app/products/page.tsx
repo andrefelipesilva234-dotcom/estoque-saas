@@ -1,11 +1,11 @@
 import ProductsSearchInput from "@/components/products-search-input";
+import ProductSearch from "@/components/product-search";
+import { AppShell } from "@/components/app-shell";
 import { hasPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { createProduct } from "@/actions/product";
 import { getUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { Sidebar } from "@/components/sidebar";
-import ProductSearch from "@/components/product-search";
 import Link from "next/link";
 
 interface PageProps {
@@ -26,32 +26,21 @@ export default async function ProductsPage({
     redirect("/login");
   }
 
-  if (
-    !hasPermission(
-      user.role,
-      "products"
-    )
-  ) {
+  if (!hasPermission(user.role, "products")) {
     redirect("/dashboard");
   }
 
-  const params =
-    await searchParams;
+  const params = await searchParams;
 
-  const search =
-    params.search || "";
+  const search = params.search || "";
 
-  const currentPage =
-    Number(
-      params.page || "1"
-    );
+  const currentPage = Math.max(
+    1,
+    Number(params.page || "1")
+  );
 
-  const sort =
-    params.sort || "createdAt";
-
-  const order =
-    params.order || "desc";
-
+  const sort = params.sort || "createdAt";
+  const order = params.order || "desc";
   const pageSize = 10;
 
   const where = {
@@ -66,7 +55,6 @@ export default async function ProductsPage({
                 mode: "insensitive" as const,
               },
             },
-
             {
               sku: {
                 contains: search,
@@ -78,147 +66,148 @@ export default async function ProductsPage({
       : {}),
   };
 
-  const totalProducts =
-    await prisma.product.count({
-      where,
-    });
-
-  const totalPages =
-    Math.ceil(
-      totalProducts /
-        pageSize
-    );
-
-  const products =
-    await prisma.product.findMany({
-      where,
-
-      orderBy: {
-        [sort]: order,
-      },
-
-      skip:
-        (currentPage - 1) *
-        pageSize,
-
-      take: pageSize,
+  const totalProducts = await prisma.product.count({
+    where,
   });
 
-return ( <div className="flex min-h-screen bg-slate-50"> <Sidebar role={user.role} />
+  const totalPages = Math.max(
+    1,
+    Math.ceil(totalProducts / pageSize)
+  );
 
-  <main className="flex-1 p-8">
-    <div className="flex justify-between items-center mb-8">
-      <div>
-        <h1 className="text-4xl font-bold text-slate-900">
-          Produtos
-        </h1>
+  const products = await prisma.product.findMany({
+    where,
 
-        <p className="text-slate-500 mt-2">
-          Total de produtos cadastrados:
-          {" "}
-          {totalProducts}
-        </p>
-      </div>
-    </div>
+    orderBy: {
+      [sort]: order,
+    },
 
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-8 max-w-3xl">
-      <h2 className="text-xl font-semibold mb-4">
-        Novo Produto
-      </h2>
+    skip: (currentPage - 1) * pageSize,
+    take: pageSize,
+  });
 
-      <form
-        action={createProduct}
-        className="grid grid-cols-1 md:grid-cols-2 gap-4"
-      >
-        <input
-          name="name"
-          placeholder="Nome do produto"
-          className="border border-slate-300 p-3 rounded-xl"
-          required
-        />
+  const paginationParams =
+    `search=${encodeURIComponent(search)}` +
+    `&sort=${encodeURIComponent(sort)}` +
+    `&order=${order}`;
 
-        <input
-          name="sku"
-          placeholder="SKU"
-          className="border border-slate-300 p-3 rounded-xl"
-        />
+  return (
+    <AppShell role={user.role}>
+      <main className="min-w-0">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 md:px-8 md:py-8">
+          <header className="mb-6 md:mb-8">
+            <h1 className="text-3xl font-bold text-slate-900 md:text-4xl">
+              Produtos
+            </h1>
 
-        <input
-          name="category"
-          placeholder="Categoria"
-          className="border border-slate-300 p-3 rounded-xl"
-        />
+            <p className="mt-2 text-sm text-slate-500 sm:text-base">
+              Total de produtos cadastrados:{" "}
+              {totalProducts}
+            </p>
+          </header>
 
-        <input
-          name="stock"
-          type="number"
-          placeholder="Estoque Inicial"
-          className="border border-slate-300 p-3 rounded-xl"
-          required
-        />
+          <section className="mb-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 lg:max-w-3xl">
+            <h2 className="mb-4 text-lg font-semibold text-slate-900 sm:text-xl">
+              Novo Produto
+            </h2>
 
-        <input
-          name="minimumStock"
-          type="number"
-          placeholder="Estoque Mínimo"
-          className="border border-slate-300 p-3 rounded-xl"
-          required
-        />
+            <form
+              action={createProduct}
+              className="grid grid-cols-1 gap-4 md:grid-cols-2"
+            >
+              <input
+                name="name"
+                placeholder="Nome do produto"
+                className="min-w-0 w-full rounded-xl border border-slate-300 p-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                required
+              />
 
-        <button
-          type="submit"
-          className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-4 py-3"
-        >
-          Salvar Produto
-        </button>
-      </form>
-    </div>
+              <input
+                name="sku"
+                placeholder="SKU"
+                className="min-w-0 w-full rounded-xl border border-slate-300 p-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
 
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-6">
+              <input
+                name="category"
+                placeholder="Categoria"
+                className="min-w-0 w-full rounded-xl border border-slate-300 p-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
 
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+              <input
+                name="stock"
+                type="number"
+                min="0"
+                placeholder="Estoque Inicial"
+                className="min-w-0 w-full rounded-xl border border-slate-300 p-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                required
+              />
 
-        <h2 className="text-xl font-semibold">
-          Lista de Produtos
-        </h2>
+              <input
+                name="minimumStock"
+                type="number"
+                min="0"
+                placeholder="Estoque Mínimo"
+                className="min-w-0 w-full rounded-xl border border-slate-300 p-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                required
+              />
 
-<ProductsSearchInput />
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white transition hover:bg-slate-800 md:col-span-2 md:w-auto md:justify-self-start"
+              >
+                Salvar Produto
+              </button>
+            </form>
+          </section>
 
-      </div>
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="p-4 sm:p-6">
+              <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">
+                  Lista de Produtos
+                </h2>
 
-      <ProductSearch
-        products={products}
-      />
+                <div className="w-full md:w-auto">
+                  <ProductsSearchInput />
+                </div>
+              </div>
 
-      <div className="flex justify-center items-center gap-3 mt-8">
+              <div className="min-w-0 overflow-x-auto">
+                <ProductSearch products={products} />
+              </div>
 
-        {currentPage > 1 && (
-          <Link
-            href={`/products?search=${search}&page=${currentPage - 1}`}
-            className="bg-slate-900 text-white px-4 py-2 rounded-xl"
-          >
-            ← Anterior
-          </Link>
-        )}
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                {currentPage > 1 && (
+                  <Link
+                    href={`/products?${paginationParams}&page=${
+                      currentPage - 1
+                    }`}
+                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                  >
+                    ← Anterior
+                  </Link>
+                )}
 
-        <span className="font-semibold text-slate-700">
-          Página {currentPage} de {totalPages}
-        </span>
+                <span className="text-center text-sm font-semibold text-slate-700 sm:text-base">
+                  Página {currentPage} de {totalPages}
+                </span>
 
-        {currentPage <
-          totalPages && (
-          <Link
-            href={`/products?search=${search}&page=${currentPage + 1}`}
-            className="bg-slate-900 text-white px-4 py-2 rounded-xl"
-          >
-            Próxima →
-          </Link>
-        )}
-
-      </div>
-    </div>
-  </main>
-</div>
-
-);
+                {currentPage < totalPages && (
+                  <Link
+                    href={`/products?${paginationParams}&page=${
+                      currentPage + 1
+                    }`}
+                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                  >
+                    Próxima →
+                  </Link>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </AppShell>
+  );
 }

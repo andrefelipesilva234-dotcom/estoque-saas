@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toggleUser } from "@/actions/toggle-user";
 
-interface Props {
+interface ToggleUserButtonProps {
   userId: string;
   active: boolean;
 }
@@ -10,32 +12,91 @@ interface Props {
 export default function ToggleUserButton({
   userId,
   active,
-}: Props) {
+}: ToggleUserButtonProps) {
+  const router = useRouter();
+
+  const [updating, setUpdating] =
+    useState(false);
+
   async function handleClick() {
-    const formData = new FormData();
+    if (updating) {
+      return;
+    }
 
-    formData.append(
-      "id",
-      userId
-    );
+    if (active) {
+      const confirmed = window.confirm(
+        "Deseja realmente desativar este usuário?"
+      );
 
-    await toggleUser(
-      formData
-    );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    try {
+      setUpdating(true);
+
+      const formData = new FormData();
+
+      formData.append("id", userId);
+
+      await toggleUser(formData);
+
+      router.refresh();
+    } catch (error) {
+      console.error(
+        "Erro ao alterar o usuário:",
+        error
+      );
+
+      window.alert(
+        "Não foi possível alterar o status do usuário. Tente novamente."
+      );
+    } finally {
+      setUpdating(false);
+    }
   }
 
   return (
     <button
+      type="button"
       onClick={handleClick}
-      className={
+      disabled={updating}
+      aria-label={
         active
-          ? "px-3 py-1 rounded-lg bg-red-100 text-red-700"
-          : "px-3 py-1 rounded-lg bg-green-100 text-green-700"
+          ? "Desativar usuário"
+          : "Ativar usuário"
       }
+      className={`
+        inline-flex
+        min-h-10
+        w-full
+        items-center
+        justify-center
+        rounded-xl
+        px-4
+        py-2
+        text-sm
+        font-semibold
+        transition
+        focus:outline-none
+        focus:ring-2
+        focus:ring-offset-2
+        disabled:cursor-not-allowed
+        disabled:opacity-60
+        sm:w-auto
+        ${
+          active
+            ? "bg-red-100 text-red-700 hover:bg-red-200 focus:ring-red-200"
+            : "bg-green-100 text-green-700 hover:bg-green-200 focus:ring-green-200"
+        }
+      `}
     >
-      {active
-        ? "Desativar"
-        : "Ativar"}
+      {updating
+        ? "Aguarde..."
+        : active
+          ? "Desativar"
+          : "Ativar"}
     </button>
   );
 }
