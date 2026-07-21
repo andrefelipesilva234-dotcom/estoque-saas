@@ -9,6 +9,20 @@ import { getUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
+function getDateKey(date: Date) {
+  const year = date.getFullYear();
+
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, "0");
+
+  const day = String(
+    date.getDate()
+  ).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 export default async function DashboardPage() {
   const user = await getUser();
 
@@ -16,157 +30,292 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const products = await prisma.product.findMany({
-    where: {
-      companyId: user.companyId,
+  const today = new Date();
+
+  const last30Days = Array.from(
+    {
+      length: 30,
     },
-  });
+    (_, index) => {
+      const date = new Date(today);
 
-  const totalProducts = products.length;
+      date.setDate(
+        today.getDate() - (29 - index)
+      );
 
-  const lowStockProducts = products.filter(
-    (product) => product.stock <= product.minimumStock
-  ).length;
+      return {
+        date,
+        label: date.toLocaleDateString(
+          "pt-BR",
+          {
+            day: "2-digit",
+            month: "2-digit",
+          }
+        ),
+      };
+    }
+  );
 
-  const healthyProducts = totalProducts - lowStockProducts;
+  const startDate =
+    last30Days[0].date;
+
+  const [
+    products,
+    movementCounts,
+    topProductCounts,
+    latestAudits,
+    movements30Days,
+  ] = await Promise.all([
+    prisma.product.findMany({
+      where: {
+        companyId: user.companyId,
+      },
+      select: {
+        id: true,
+        name: true,
+        stock: true,
+        minimumStock: true,
+      },
+    }),
+
+    prisma.stockMovement.groupBy({
+      by: ["type"],
+      where: {
+        product: {
+          companyId: user.companyId,
+        },
+      },
+      _count: {
+        _all: true,
+      },
+    }),
+
+    prisma.stockMovement.groupBy({
+      by: ["productId"],
+      where: {
+        product: {
+          companyId: user.companyId,
+        },
+      },
+      _count: {
+        _all: true,
+      },
+      orderBy: {
+        _count: {
+          productId: "desc",
+        },
+      },
+      take: 5,
+    }),
+
+    prisma.auditLog.findMany({
+      where: {
+        companyId: user.companyId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 5,
+      select: {
+        id: true,
+        action: true,
+        productName: true,
+        oldStock: true,
+        newStock: true,
+        difference: true,
+        createdAt: true,
+      },
+    }),
+
+    prisma.stockMovement.findMany({
+      where: {
+        product: {
+          companyId: user.companyId,
+        },
+        createdAt: {
+          gte: startDate,
+        },
+      },
+      select: {
+        type: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+
+  const totalProducts =
+    products.length;
+
+  const lowStockProducts =
+    products.filter(
+      (product) =>
+        product.stock <=
+        product.minimumStock
+    ).length;
+
+  const healthyProducts =
+    totalProducts -
+    lowStockProducts;
 
   const stockHealth =
     totalProducts > 0
-      ? Math.round((healthyProducts / totalProducts) * 100)
+      ? Math.round(
+          (healthyProducts /
+            totalProducts) *
+            100
+        )
       : 100;
 
-  const totalItems = products.reduce(
-    (acc, product) => acc + product.stock,
-    0
-  );
-
-  const totalPerdas = await prisma.stockMovement.count({
-    where: {
-      type: "PERDA",
-      product: {
-        companyId: user.companyId,
-      },
-    },
-  });
-
-  const totalEntradas = await prisma.stockMovement.count({
-    where: {
-      type: "ENTRADA",
-      product: {
-        companyId: user.companyId,
-      },
-    },
-  });
-
-  const totalSaidas = await prisma.stockMovement.count({
-    where: {
-      type: "SAIDA",
-      product: {
-        companyId: user.companyId,
-      },
-    },
-  });
-
-  const produtosCriticos = await prisma.product.findMany({
-    where: {
-      companyId: user.companyId,
-    },
-    orderBy: {
-      stock: "asc",
-    },
-    take: 5,
-  });
-
-  const movements = await prisma.stockMovement.findMany({
-    where: {
-      product: {
-        companyId: user.companyId,
-      },
-    },
-    include: {
-      product: true,
-    },
-  });
-
-  const topProductsMap = new Map<
-    string,
-    {
-      productId: string;
-      productName: string;
-      total: number;
-    }
-  >();
-
-  for (const movement of movements) {
-    const current = topProductsMap.get(movement.productId) || {
-      productId: movement.productId,
-      productName: movement.product.name,
-      total: 0,
-    };
-
-    current.total += 1;
-
-    topProductsMap.set(movement.productId, current);
-  }
-
-  const topProducts = Array.from(topProductsMap.values())
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5);
-
-  const latestAudits = await prisma.auditLog.findMany({
-    where: {
-      companyId: user.companyId,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-    take: 5,
-  });
-
-  const last30Days = Array.from({ length: 30 }, (_, index) => {
-    const date = new Date();
-
-    date.setDate(date.getDate() - (29 - index));
-
-    return {
-      date,
-      label: date.toLocaleDateString("pt-BR", {
-        day: "2-digit",
-        month: "2-digit",
-      }),
-    };
-  });
-
-  const movements30Days = await prisma.stockMovement.findMany({
-    where: {
-      product: {
-        companyId: user.companyId,
-      },
-      createdAt: {
-        gte: last30Days[0].date,
-      },
-    },
-  });
-
-  const chartData = last30Days.map((day) => {
-    const sameDay = movements30Days.filter(
-      (movement) =>
-        movement.createdAt.toDateString() === day.date.toDateString()
+  const totalItems =
+    products.reduce(
+      (total, product) =>
+        total + product.stock,
+      0
     );
 
-    return {
-      date: day.label,
-      entradas: sameDay.filter(
-        (movement) => movement.type === "ENTRADA"
-      ).length,
-      saidas: sameDay.filter(
-        (movement) => movement.type === "SAIDA"
-      ).length,
-      perdas: sameDay.filter(
-        (movement) => movement.type === "PERDA"
-      ).length,
-    };
-  });
+  function getMovementCount(
+    acceptedTypes: string[]
+  ) {
+    return movementCounts.reduce(
+      (total, movement) => {
+        if (
+          acceptedTypes.includes(
+            movement.type
+          )
+        ) {
+          return (
+            total +
+            movement._count._all
+          );
+        }
+
+        return total;
+      },
+      0
+    );
+  }
+
+  const totalPerdas =
+    getMovementCount([
+      "PERDA",
+      "LOSS",
+    ]);
+
+  const totalEntradas =
+    getMovementCount([
+      "ENTRADA",
+      "ENTRY",
+    ]);
+
+  const totalSaidas =
+    getMovementCount([
+      "SAIDA",
+      "EXIT",
+    ]);
+
+  const produtosCriticos = [
+    ...products,
+  ]
+    .sort(
+      (firstProduct, secondProduct) =>
+        firstProduct.stock -
+        secondProduct.stock
+    )
+    .slice(0, 5);
+
+  const productNameById =
+    new Map(
+      products.map((product) => [
+        product.id,
+        product.name,
+      ])
+    );
+
+  const topProducts =
+    topProductCounts.map(
+      (product) => ({
+        productId:
+          product.productId,
+
+        productName:
+          productNameById.get(
+            product.productId
+          ) ||
+          "Produto não encontrado",
+
+        total:
+          product._count._all,
+      })
+    );
+
+  const chartDataByDate =
+    new Map(
+      last30Days.map((day) => [
+        getDateKey(day.date),
+        {
+          date: day.label,
+          entradas: 0,
+          saidas: 0,
+          perdas: 0,
+        },
+      ])
+    );
+
+  for (
+    const movement of movements30Days
+  ) {
+    const dateKey =
+      getDateKey(
+        movement.createdAt
+      );
+
+    const chartDay =
+      chartDataByDate.get(dateKey);
+
+    if (!chartDay) {
+      continue;
+    }
+
+    if (
+      movement.type === "ENTRADA" ||
+      movement.type === "ENTRY"
+    ) {
+      chartDay.entradas += 1;
+      continue;
+    }
+
+    if (
+      movement.type === "SAIDA" ||
+      movement.type === "EXIT"
+    ) {
+      chartDay.saidas += 1;
+      continue;
+    }
+
+    if (
+      movement.type === "PERDA" ||
+      movement.type === "LOSS"
+    ) {
+      chartDay.perdas += 1;
+    }
+  }
+
+  const chartData =
+    last30Days.map((day) => {
+      const dateKey =
+        getDateKey(day.date);
+
+      return (
+        chartDataByDate.get(
+          dateKey
+        ) || {
+          date: day.label,
+          entradas: 0,
+          saidas: 0,
+          perdas: 0,
+        }
+      );
+    });
 
   return (
     <AppShell role={user.role}>
@@ -188,10 +337,15 @@ export default async function DashboardPage() {
               value={totalProducts}
             />
 
-            <Link href="/low-stock" className="block">
+            <Link
+              href="/low-stock"
+              className="block"
+            >
               <KpiCard
                 title="Alertas"
-                value={lowStockProducts}
+                value={
+                  lowStockProducts
+                }
                 description="Produtos abaixo do mínimo"
                 variant={
                   lowStockProducts > 0
@@ -233,7 +387,8 @@ export default async function DashboardPage() {
               variant={
                 stockHealth < 80
                   ? "danger"
-                  : stockHealth < 95
+                  : stockHealth <
+                      95
                     ? "warning"
                     : "default"
               }
@@ -247,23 +402,37 @@ export default async function DashboardPage() {
 
           <div className="mb-8 space-y-6">
             <ExecutiveSummary
-              stockHealth={stockHealth}
-              lowStockProducts={lowStockProducts}
-              totalPerdas={totalPerdas}
+              stockHealth={
+                stockHealth
+              }
+              lowStockProducts={
+                lowStockProducts
+              }
+              totalPerdas={
+                totalPerdas
+              }
             />
 
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
               <div className="min-w-0 xl:col-span-2">
-                <MovementsChart data={chartData} />
+                <MovementsChart
+                  data={chartData}
+                />
               </div>
 
               <AlertsCenter
-                lowStockProducts={lowStockProducts}
-                totalPerdas={totalPerdas}
+                lowStockProducts={
+                  lowStockProducts
+                }
+                totalPerdas={
+                  totalPerdas
+                }
               />
             </div>
 
-            <TopProductsChart data={topProducts} />
+            <TopProductsChart
+              data={topProducts}
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -275,7 +444,7 @@ export default async function DashboardPage() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="min-w-[560px] w-full">
+                <table className="w-full min-w-[560px]">
                   <thead className="bg-slate-50">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs uppercase tracking-wider text-slate-500 sm:px-6 sm:py-4">
@@ -293,36 +462,53 @@ export default async function DashboardPage() {
                   </thead>
 
                   <tbody>
-                    {produtosCriticos.map((product, index) => (
-                      <tr
-                        key={product.id}
-                        className={
-                          index % 2 === 0
-                            ? "bg-white"
-                            : "bg-slate-50"
-                        }
-                      >
-                        <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
-                          {product.name}
-                        </td>
+                    {produtosCriticos.map(
+                      (
+                        product,
+                        index
+                      ) => (
+                        <tr
+                          key={
+                            product.id
+                          }
+                          className={
+                            index %
+                              2 ===
+                            0
+                              ? "bg-white"
+                              : "bg-slate-50"
+                          }
+                        >
+                          <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
+                            {
+                              product.name
+                            }
+                          </td>
 
-                        <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
-                          {product.stock}
-                        </td>
+                          <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
+                            {
+                              product.stock
+                            }
+                          </td>
 
-                        <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
-                          {product.minimumStock}
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
+                            {
+                              product.minimumStock
+                            }
+                          </td>
+                        </tr>
+                      )
+                    )}
 
-                    {produtosCriticos.length === 0 && (
+                    {produtosCriticos.length ===
+                      0 && (
                       <tr>
                         <td
                           colSpan={3}
                           className="px-4 py-8 text-center text-sm text-slate-500 sm:px-6"
                         >
-                          Nenhum produto cadastrado.
+                          Nenhum produto
+                          cadastrado.
                         </td>
                       </tr>
                     )}
@@ -339,7 +525,7 @@ export default async function DashboardPage() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="min-w-[900px] w-full">
+                <table className="w-full min-w-[900px]">
                   <thead className="bg-slate-50">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs uppercase tracking-wider text-slate-500 sm:px-6 sm:py-4">
@@ -351,7 +537,8 @@ export default async function DashboardPage() {
                       </th>
 
                       <th className="px-4 py-3 text-left text-xs uppercase tracking-wider text-slate-500 sm:px-6 sm:py-4">
-                        Estoque Anterior
+                        Estoque
+                        Anterior
                       </th>
 
                       <th className="px-4 py-3 text-left text-xs uppercase tracking-wider text-slate-500 sm:px-6 sm:py-4">
@@ -369,52 +556,71 @@ export default async function DashboardPage() {
                   </thead>
 
                   <tbody>
-                    {latestAudits.map((audit, index) => (
-                      <tr
-                        key={audit.id}
-                        className={
-                          index % 2 === 0
-                            ? "bg-white"
-                            : "bg-slate-50"
-                        }
-                      >
-                        <td className="px-4 py-3 sm:px-6 sm:py-4">
-                          <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
-                            {audit.action}
-                          </span>
-                        </td>
+                    {latestAudits.map(
+                      (
+                        audit,
+                        index
+                      ) => (
+                        <tr
+                          key={
+                            audit.id
+                          }
+                          className={
+                            index %
+                              2 ===
+                            0
+                              ? "bg-white"
+                              : "bg-slate-50"
+                          }
+                        >
+                          <td className="px-4 py-3 sm:px-6 sm:py-4">
+                            <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
+                              {
+                                audit.action
+                              }
+                            </span>
+                          </td>
 
-                        <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
-                          {audit.productName || "-"}
-                        </td>
+                          <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
+                            {audit.productName ||
+                              "-"}
+                          </td>
 
-                        <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
-                          {audit.oldStock ?? "-"}
-                        </td>
+                          <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
+                            {audit.oldStock ??
+                              "-"}
+                          </td>
 
-                        <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
-                          {audit.newStock ?? "-"}
-                        </td>
+                          <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
+                            {audit.newStock ??
+                              "-"}
+                          </td>
 
-                        <td className="px-4 py-3 text-sm font-semibold sm:px-6 sm:py-4">
-                          {audit.difference ?? "-"}
-                        </td>
+                          <td className="px-4 py-3 text-sm font-semibold sm:px-6 sm:py-4">
+                            {audit.difference ??
+                              "-"}
+                          </td>
 
-                        <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
-                          {new Date(
-                            audit.createdAt
-                          ).toLocaleDateString("pt-BR")}
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="px-4 py-3 text-sm sm:px-6 sm:py-4">
+                            {new Date(
+                              audit.createdAt
+                            ).toLocaleDateString(
+                              "pt-BR"
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    )}
 
-                    {latestAudits.length === 0 && (
+                    {latestAudits.length ===
+                      0 && (
                       <tr>
                         <td
                           colSpan={6}
                           className="px-4 py-8 text-center text-sm text-slate-500 sm:px-6"
                         >
-                          Nenhuma auditoria registrada.
+                          Nenhuma auditoria
+                          registrada.
                         </td>
                       </tr>
                     )}
